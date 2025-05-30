@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -13,7 +14,7 @@ class _ReportDangerState extends State<ReportDanger> {
   String? _selectedGravity;
   String? _details;
 
-//// for commit
+  //TODO: Style this!
   @override
   Widget build(BuildContext context) {
 
@@ -69,24 +70,31 @@ class _ReportDangerState extends State<ReportDanger> {
                   ),
                   SizedBox(height: 20,),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if(_formKey.currentState!.validate()) {
                         _formKey.currentState!.save();
-                        DateTime now = DateTime.now();
 
                         //TODO: Send this to Firebase
-                        print('Gravity: $_selectedGravity');
-                        print('Details: $_details');
-                        print('Position: ${reportedPosition.latitude}, ${reportedPosition.longitude}');
-                        print('Time: $now');
+                        final Map<String, dynamic> reportData = {
+                          'position' : {
+                            'latitude': reportedPosition.latitude,
+                            'longitude': reportedPosition.longitude,
+                          },
+                          'level': _selectedGravity,
+                          'details': _details,
+                          'timestamp': FieldValue.serverTimestamp(),
+                        };
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Report submitted!')),
-                        );
+                        try {
+                          await FirebaseFirestore.instance.collection('dangerReports').add(reportData);
 
-
-                        //TODO: send back a response code true
-                        Navigator.pop(context);
+                          // Go back to previous screen and indicate success
+                          Navigator.pop(context, true);
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error submitting report: $e')),
+                          );
+                        }
                       }
                     },
                     child: Text('Submit Report'),

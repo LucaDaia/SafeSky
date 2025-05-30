@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "100876508868",
+    "project_id": "safesky-fe7cb",
+    "storage_bucket": "safesky-fe7cb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:100876508868:android:4e69e2db69896aa1863391",
+        "android_client_info": {
+          "package_name": "com.example.safe_sky"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA02mSDIOS8m-8DH4pNubeuhWPgQdSQ2Jk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:safe_sky/utils/dark_map.dart';
 import 'package:top_snackbar_flutter/custom_snack_bar.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MapActivity extends StatefulWidget {
   @override
@@ -13,6 +16,9 @@ class MapActivity extends StatefulWidget {
 
 class _MapActivityState extends State<MapActivity> {
 
+  //firebase push notifications
+  StreamSubscription? _reportsSubscription;
+
   //for zooming in on the location on activity start
   late GoogleMapController _mapController;
   LatLng? _currentPosition;
@@ -20,11 +26,54 @@ class _MapActivityState extends State<MapActivity> {
   //for markers and reports
   LatLng? _currentMarkedPosition;
   Set<Marker> _markers = {};
+  bool longPress = false;
+  final String _pendingMarkerId = "pending_marker";
 
   @override
   void initState() {
     super.initState();
     _determinePosition();
+    _startReportsListener();
+  }
+
+  @override
+  void dispose() {
+    _reportsSubscription?.cancel();
+    super.dispose();
+  }
+  
+  void _startReportsListener() {
+    _reportsSubscription = FirebaseFirestore.instance
+        .collection('dangerReports')
+        .snapshots()
+        .listen((snapshot) {
+          Set<Marker> newMarkers = {};
+          
+          for(var doc in snapshot.docs) {
+            var data = doc.data();
+            var lat = data['position']['latitude'];
+            var lng = data['position']['longitude'];
+            var level = data['level'] ?? 'Unknown';
+            var details = data['details'] ?? '';
+            
+            newMarkers.add(
+              Marker(
+                  markerId: MarkerId(doc.id),
+                  position: LatLng(lat, lng),
+                  infoWindow: InfoWindow(
+                    title: 'Danger level: $level',
+                    snippet: details,
+                  )
+              ),
+
+
+            );
+          }
+
+          setState(() {
+            _markers = newMarkers;
+          });
+    });
   }
 
   Future<void> _determinePosition() async {
@@ -61,17 +110,24 @@ class _MapActivityState extends State<MapActivity> {
     _mapController = controller;
     _mapController.setMapStyle(DarkMap.darkMapStyle);
   }
-// TODO: Add a drawer here
-  // TODO: Maybe remove the AppBar - looks ugly
+//  TODO: Add a drawer here
   // TODO: add a light theme
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: FloatingActionButton.large(
-        onPressed: () {
+        onPressed: () async {
           if(_currentMarkedPosition != null) {
-            Navigator.pushNamed(context, '/report',
+           final result = await Navigator.pushNamed(context, '/report',
                 arguments: {'reportedPosition': _currentMarkedPosition});
+
+           if(result == true) {
+             //Report submitted, remove pending marker
+             setState(() {
+               _markers.removeWhere((m) => m.markerId.value == _pendingMarkerId);
+               _currentMarkedPosition = null;
+             });
+           }
           }
           else {
             showTopSnackBar(
@@ -100,23 +156,24 @@ class _MapActivityState extends State<MapActivity> {
         markers: _markers,
         onLongPress: (LatLng pos) {
 
-          setState(() {
-            _currentMarkedPosition = pos;
-            _markers = {
-              Marker(
-                markerId: MarkerId(pos.toString()),
-                position: pos,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Danger Zone at (${pos.latitude}, ${pos.longitude})'),
-                      duration: Duration(seconds: 3),
-                    ),
-                  );
-                },
-              ),
-            };
+          Marker toReportMarker = new Marker(
+            markerId: MarkerId(_pendingMarkerId),
+            position: pos,
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Danger Zone at (${pos.latitude}, ${pos.longitude})'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            },
+          );
 
+          setState(() {
+
+            _markers.removeWhere((m) => m.markerId.value == _pendingMarkerId);
+            _currentMarkedPosition = pos;
+            _markers.add(toReportMarker);
           });
 
          showTopSnackBar(
