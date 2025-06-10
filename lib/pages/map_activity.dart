@@ -133,20 +133,83 @@ class _MapActivityState extends State<MapActivity> {
   }
 //  TODO: Complete drawer
   // TODO: Add a button click animation, at least for the report button
-  // TODO: add a light theme
+  // TODO: call authorities
   @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       drawer: Drawer(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            CircleAvatar(),
-            Text('SafeSky'),
-            Text('Welcome to safeSky'),
-          ],
+        backgroundColor: Colors.blueGrey.shade900,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24.0),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage: AssetImage('assets/SafeSkyLogo.png'),
+                      backgroundColor: Colors.transparent,
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'SafeSky',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 30,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 20,),
+                    Text(
+                      'Welcome, User!',
+                      style: TextStyle(color: Colors.white, fontSize: 22),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                color: Colors.blueGrey[400],
+                thickness: 1,
+              ),
+              // Pushes the buttons to the bottom
+              Spacer(),
+
+              // Bottom buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {},
+                      icon: Icon(Icons.settings),
+                      label: Text('Settings'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey.shade700,
+                        foregroundColor: Colors.white,
+                        minimumSize: Size.fromHeight(50),
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      onPressed: () {},
+                      icon: Icon(Icons.mail_outline),
+                      label: Text('Contact Us'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey.shade700,
+                        foregroundColor: Colors.white,
+                        minimumSize: Size.fromHeight(50),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: Padding(

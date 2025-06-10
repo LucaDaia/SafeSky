@@ -74,7 +74,6 @@ class _ReportDangerState extends State<ReportDanger> {
                       if(_formKey.currentState!.validate()) {
                         _formKey.currentState!.save();
 
-                        //TODO: Send this to Firebase
                         final Map<String, dynamic> reportData = {
                           'position' : {
                             'latitude': reportedPosition.latitude,
