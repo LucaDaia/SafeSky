@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,7 @@ import 'package:safe_sky/utils/dark_map.dart';
 import 'package:top_snackbar_flutter/custom_snack_bar.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:safe_sky/services//auth_service.dart';
 
 class MapActivity extends StatefulWidget {
   @override
@@ -15,6 +17,9 @@ class MapActivity extends StatefulWidget {
 }
 
 class _MapActivityState extends State<MapActivity> {
+
+  //firebase authentication instance
+  String _displayName = 'User';
 
   //firebase push notifications
   StreamSubscription? _reportsSubscription;
@@ -43,6 +48,7 @@ class _MapActivityState extends State<MapActivity> {
     super.initState();
     _determinePosition();
     _startReportsListener();
+    _loadUserInfo();
   }
 
   @override
@@ -65,6 +71,7 @@ class _MapActivityState extends State<MapActivity> {
             var lng = data['position']['longitude'];
             var level = data['level'] ?? 'Unknown';
             var details = data['details'] ?? '';
+            var userReporting = data['user'] ?? 'Anonymous';
             
             newMarkers.add(
               Marker(
@@ -72,7 +79,8 @@ class _MapActivityState extends State<MapActivity> {
                   position: LatLng(lat, lng),
                   infoWindow: InfoWindow(
                     title: 'Danger level: $level',
-                    snippet: details,
+                    snippet: 'Reported by $userReporting: \n $details',
+
                   ),
 
               ),
@@ -127,11 +135,18 @@ class _MapActivityState extends State<MapActivity> {
     }
   }
 
+  void _loadUserInfo() {
+    final user = FirebaseAuth.instance.currentUser;
+    setState(() {
+      _displayName =
+          user?.displayName ?? user?.email ?? 'User'; // fallback if no displayName
+    });
+  }
+
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController.setMapStyle(DarkMap.darkMapStyle);
   }
-//  TODO: Complete drawer
   // TODO: Add a button click animation, at least for the report button
   // TODO: call authorities
   @override
@@ -165,7 +180,7 @@ class _MapActivityState extends State<MapActivity> {
                     ),
                     SizedBox(height: 20,),
                     Text(
-                      'Welcome, User!',
+                      'Welcome, $_displayName',
                       style: TextStyle(color: Colors.white, fontSize: 22),
                     ),
                   ],
@@ -220,7 +235,7 @@ class _MapActivityState extends State<MapActivity> {
               final result = await Navigator.pushNamed(
                 context,
                 '/report',
-                arguments: {'reportedPosition': _currentMarkedPosition},
+                arguments: {'reportedPosition': _currentMarkedPosition, 'displayName': _displayName},
               );
 
               if (result == true) {
