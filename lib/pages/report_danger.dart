@@ -112,8 +112,7 @@ class _ReportDangerState extends State<ReportDanger> {
 
                         try {
                           await FirebaseFirestore.instance.collection('dangerReports').add(reportData);
-
-                          // Go back to previous screen and indicate success
+                          // Returns to the previous screen to indicate success
                           Navigator.pop(context, true);
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(

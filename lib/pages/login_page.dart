@@ -14,6 +14,19 @@ class _LoginPageState extends State<LoginPage> {
   final _authService = AuthService();
   String? error;
 
+  @override
+  void initState() {
+    super.initState();
+    _authService.user.listen((user) {
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/map');
+      } else {
+        // stay on login page or do nothing
+      }
+    });
+  }
+
+
   void _login() async {
     var user = await _authService.signIn(_emailController.text, _passwordController.text);
     if (user != null) {
@@ -24,6 +37,7 @@ class _LoginPageState extends State<LoginPage> {
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

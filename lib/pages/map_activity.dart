@@ -20,6 +20,7 @@ class _MapActivityState extends State<MapActivity> {
 
   //firebase authentication instance
   String _displayName = 'User';
+  AuthService _authService = new AuthService();
 
   //firebase push notifications
   StreamSubscription? _reportsSubscription;
@@ -122,7 +123,7 @@ class _MapActivityState extends State<MapActivity> {
       _mapController.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: _currentPosition!, //  ! for promising its not a null value
+            target: _currentPosition!,
             zoom: 16.0,
           ),
         ),
@@ -199,9 +200,12 @@ class _MapActivityState extends State<MapActivity> {
                 child: Column(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () {},
-                      icon: Icon(Icons.settings),
-                      label: Text('Settings'),
+                      onPressed: () {
+                        _authService.signOut();
+                        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                      },
+                      icon: Icon(Icons.logout),
+                      label: Text('Sign Out'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueGrey.shade700,
                         foregroundColor: Colors.white,

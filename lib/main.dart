@@ -7,7 +7,10 @@ import 'package:safe_sky/pages/register_page.dart';
 import 'package:safe_sky/pages/report_danger.dart';
 
 
-//TODO: Authentication
+// TODO: app opening animation -> put the safesky logo
+// maybe remove the pins and keep the circles
+//chat activity
+//change buttons colors from map activity
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();

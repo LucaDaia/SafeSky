@@ -17,7 +17,7 @@ class AuthService {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
       await result.user!.updateDisplayName(displayName);
-      await result.user!.reload(); // Refresh user info
+      await result.user!.reload();
       return result.user;
     } catch (e) {
       print("Registration failed: $e");
