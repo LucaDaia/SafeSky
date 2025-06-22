@@ -49,6 +49,11 @@ class _RegisterPageState extends State<RegisterPage> {
                 error!,
                 style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
               ),
+            CircleAvatar(
+              radius: 60,
+              backgroundImage: AssetImage('assets/SafeSkyLogo.png'),
+              backgroundColor: Colors.transparent,
+            ),
             SizedBox(height: 10),
             TextField(
               controller: _emailController,

@@ -1,15 +1,18 @@
 import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:safe_sky/components/custom_elevatedbutton.dart';
+import 'package:safe_sky/utils/call_auth.dart';
 import 'package:safe_sky/utils/dark_map.dart';
 import 'package:top_snackbar_flutter/custom_snack_bar.dart';
 import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:safe_sky/services//auth_service.dart';
+
+//TODO: Zoom In pe locatia raportata la revenirea in ecran
 
 class MapActivity extends StatefulWidget {
   @override
@@ -36,6 +39,9 @@ class _MapActivityState extends State<MapActivity> {
   bool longPress = false;
   final String _pendingMarkerId = "pending_marker";
 
+  //for warnings
+  Circle? _lastWarnedZone;
+
   //map costumization
   bool isDarkTheme = true;
   bool isDefault = true;
@@ -57,60 +63,77 @@ class _MapActivityState extends State<MapActivity> {
     _reportsSubscription?.cancel();
     super.dispose();
   }
-  
+
   void _startReportsListener() {
     _reportsSubscription = FirebaseFirestore.instance
         .collection('dangerReports')
         .snapshots()
         .listen((snapshot) {
-          Set<Marker> newMarkers = {};
-          Set<Circle> newCircles = {};
-          
-          for(var doc in snapshot.docs) {
-            var data = doc.data();
-            var lat = data['position']['latitude'];
-            var lng = data['position']['longitude'];
-            var level = data['level'] ?? 'Unknown';
-            var details = data['details'] ?? '';
-            var userReporting = data['user'] ?? 'Anonymous';
-            
-            newMarkers.add(
-              Marker(
-                  markerId: MarkerId(doc.id),
-                  position: LatLng(lat, lng),
-                  infoWindow: InfoWindow(
-                    title: 'Danger level: $level',
-                    snippet: 'Reported by $userReporting: \n $details',
+      Set<Marker> newMarkers = {};
+      Set<Circle> newCircles = {};
 
-                  ),
+      for (var doc in snapshot.docs) {
+        var data = doc.data();
+        var lat = data['position']['latitude'];
+        var lng = data['position']['longitude'];
+        var level = data['level'] ?? 'Unknown';
+        var details = data['details'] ?? '';
+        var userReporting = data['user'] ?? 'Anonymous';
 
-              ),
-            );
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(doc.id),
+            position: LatLng(lat, lng),
+            infoWindow: InfoWindow(
+              title: 'Danger level: $level',
+              snippet: 'Reported by $userReporting: \n $details',
+            ),
+          ),
+        );
 
-            newCircles.add(
-                Circle(
-                    circleId: CircleId(doc.id),
-                    radius: 50,
-                    center: LatLng(lat, lng),
-                    strokeColor: Colors.redAccent,
-                    strokeWidth: 1,
-                    fillColor: Colors.redAccent.withOpacity(0.2),
-                ),
-            );
+        newCircles.add(
+          Circle(
+            circleId: CircleId(doc.id),
+            radius: 50,
+            center: LatLng(lat, lng),
+            strokeColor: Colors.redAccent,
+            strokeWidth: 1,
+            fillColor: Colors.redAccent.withOpacity(0.2),
+          ),
+        );
+      }
+
+      setState(() {
+        _markers = newMarkers;
+        _circles = newCircles;
+      });
+
+      // 🔥 CHANGE: Check if current user location is inside any of the NEW zones
+      if (_currentPosition != null) {
+        for (var circle in newCircles) {
+          double distance = Geolocator.distanceBetween(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            circle.center.latitude,
+            circle.center.longitude,
+          );
+
+          if (distance <= circle.radius) {
+            if (_lastWarnedZone?.circleId != circle.circleId) {
+              _lastWarnedZone = circle;
+              _showDangerSnackbar(circle.center);
+            }
+            break;
           }
-
-          setState(() {
-            _markers = newMarkers;
-            _circles = newCircles;
-          });
+        }
+      }
     });
   }
 
+
   Future<void> _determinePosition() async {
-    // Request permission
     await Permission.location.request();
 
-    // Check permission status
     if (await Permission.location.isGranted) {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -118,6 +141,18 @@ class _MapActivityState extends State<MapActivity> {
 
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
+      });
+
+      // 🔥 CHANGE: Listen for continuous location updates
+      Geolocator.getPositionStream(
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10, // Only update if moved > 10 meters
+        ),
+      ).listen((Position position) {
+        LatLng newPos = LatLng(position.latitude, position.longitude);
+        _currentPosition = newPos; // 🔥 Save updated location
+        _checkIfInsideRedZone(newPos); // 🔥 Check for proximity on move
       });
 
       _mapController.animateCamera(
@@ -129,7 +164,6 @@ class _MapActivityState extends State<MapActivity> {
         ),
       );
     } else {
-      // Handle permission denied
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Location permission not granted')),
       );
@@ -148,6 +182,90 @@ class _MapActivityState extends State<MapActivity> {
     _mapController = controller;
     _mapController.setMapStyle(DarkMap.darkMapStyle);
   }
+
+  void _checkIfInsideRedZone(LatLng userLocation) {
+    for(Circle c in _circles) {
+      final double distance = Geolocator.distanceBetween(
+          userLocation.latitude,
+          userLocation.longitude,
+          c.center.latitude,
+          c.center.longitude
+      );
+
+      if (distance <= c.radius) {
+        if (_lastWarnedZone?.circleId != c.circleId) {
+          _lastWarnedZone = c;
+          _showDangerSnackbar(c.center);
+        }
+        return;
+      }
+    }
+    _lastWarnedZone = null;
+  }
+
+  void _showDangerSnackbar(LatLng zoneCenter) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🚨 You have entered a danger zone!'),
+        backgroundColor: Colors.red[800],
+        duration: Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Confirm Danger',
+          textColor: Colors.white,
+          onPressed: () {
+            _confirmDanger(zoneCenter);
+          },
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> _confirmDanger(LatLng location) async {
+    try {
+      // 🔥 Query the Firestore collection for a matching report (by location)
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('dangerReports')
+          .where('position.latitude', isEqualTo: location.latitude)
+          .where('position.longitude', isEqualTo: location.longitude)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final doc = querySnapshot.docs.first;
+
+        // 🔄 Increment the upVotes field using FieldValue.increment
+        await doc.reference.update({
+          'upVotes': FieldValue.increment(1),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Thanks! Your confirmation was recorded.'),
+            backgroundColor: Colors.green[700],
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Could not find the report to confirm.'),
+            backgroundColor: Colors.orange[700],
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error while confirming danger: $e'),
+          backgroundColor: Colors.red[800],
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+
   // TODO: Add a button click animation, at least for the report button
   // TODO: call authorities
   @override
@@ -199,29 +317,49 @@ class _MapActivityState extends State<MapActivity> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        _authService.signOut();
-                        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                      },
-                      icon: Icon(Icons.logout),
-                      label: Text('Sign Out'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey.shade700,
-                        foregroundColor: Colors.white,
-                        minimumSize: Size.fromHeight(50),
-                      ),
+                    CustomElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            isDefault = !isDefault;
+                            mapType = isDefault ? MapType.normal : MapType.satellite;
+                          });
+                        },
+                        icon: Icons.map_rounded,
+                        label: 'Type'
+                    ),
+                    SizedBox(height: 10,),
+                    CustomElevatedButton(
+                        onPressed: () {
+                          if(!isDefault) {
+                            setState(() {
+                              isDefault = !isDefault;
+                              mapType = isDefault ? MapType.normal : MapType.satellite;
+                            });
+                          }
+                          setState(() {
+                            isDarkTheme = !isDarkTheme;
+
+                            _mapController.setMapStyle(
+                              isDarkTheme ? DarkMap.darkMapStyle : null, // null resets to default
+                            );
+                          });
+                        },
+                        icon: Icons.dark_mode_outlined,
+                        label: 'Theme',
+                    ),
+                    SizedBox(height: 40,),
+                    CustomElevatedButton(
+                        onPressed: () {
+                          _authService.signOut();
+                          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                        },
+                        icon: Icons.logout,
+                        label: 'Sign out'
                     ),
                     SizedBox(height: 10),
-                    ElevatedButton.icon(
-                      onPressed: () {},
-                      icon: Icon(Icons.mail_outline),
-                      label: Text('Contact Us'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey.shade700,
-                        foregroundColor: Colors.white,
-                        minimumSize: Size.fromHeight(50),
-                      ),
+                    CustomElevatedButton(onPressed: () {},
+                        icon: Icons.mail_outline,
+                        label: 'Contact Us'
                     ),
                     SizedBox(height: 20),
                   ],
@@ -325,37 +463,18 @@ class _MapActivityState extends State<MapActivity> {
               children: [
                 ElevatedButton.icon(
                   onPressed: () {
-                    setState(() {
-                      isDarkTheme = !isDarkTheme;
-
-                      _mapController.setMapStyle(
-                        isDarkTheme ? DarkMap.darkMapStyle : null, // null resets to default
-                      );
-                    });
+                    CallAuthorities.call();
                   },
-                  icon: Icon(Icons.dark_mode_outlined),
-                  label: Text("Theme"),
-                ),
-
-                ElevatedButton.icon(
-                  onPressed: () {
-
-                    setState(() {
-                      isDefault = !isDefault;
-                      mapType = isDefault ? MapType.normal : MapType.satellite;
-                    });
-                  },
-                  icon: Icon(Icons.map_outlined),
-                  label: Text("Type"),
+                  icon: Icon(Icons.call),
+                  label: Text("Emergency"),
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    print("Center");
-                    if (_currentPosition != null) {
-                      _mapController.animateCamera(
-                        CameraUpdate.newLatLng(_currentPosition!),
-                      );
-                    }
+                    Navigator.pushNamed(
+                      context,
+                      '/chat',
+                        arguments: {'currentPosition': _currentPosition}
+                    );
                   },
                   icon: Icon(Icons.chat_outlined),
                   label: Text("Chat"),

@@ -108,6 +108,7 @@ class _ReportDangerState extends State<ReportDanger> {
                           'details': _details,
                           'timestamp': FieldValue.serverTimestamp(),
                           'user': _displayName,
+                          'upVotes': 0,
                         };
 
                         try {
