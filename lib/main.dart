@@ -24,7 +24,13 @@ void main() async {
       '/register' : (context) => RegisterPage(),
       '/map' : (context) => MapActivity(),
       '/report' : (context) => ReportDanger(),
-      '/chat' : (context) => Chat(),
+      '/chat': (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map;
+        return Chat(
+          zoneId: args['zoneId'],
+          displayName: args['displayName'],
+        );
+      },
     },
   ));
 }

@@ -12,6 +12,8 @@ import 'package:top_snackbar_flutter/top_snack_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:safe_sky/services//auth_service.dart';
 
+import '../components/danger_snackbar.dart';
+
 //TODO: Zoom In pe locatia raportata la revenirea in ecran
 
 class MapActivity extends StatefulWidget {
@@ -38,6 +40,9 @@ class _MapActivityState extends State<MapActivity> {
   Set<Circle> _circles = {};
   bool longPress = false;
   final String _pendingMarkerId = "pending_marker";
+
+  //for chat
+  String? _currentChatZoneId = null;
 
   //for warnings
   Circle? _lastWarnedZone;
@@ -151,8 +156,8 @@ class _MapActivityState extends State<MapActivity> {
         ),
       ).listen((Position position) {
         LatLng newPos = LatLng(position.latitude, position.longitude);
-        _currentPosition = newPos; // 🔥 Save updated location
-        _checkIfInsideRedZone(newPos); // 🔥 Check for proximity on move
+        _currentPosition = newPos; //
+        _checkIfInsideRedZone(newPos); //
       });
 
       _mapController.animateCamera(
@@ -195,6 +200,7 @@ class _MapActivityState extends State<MapActivity> {
       if (distance <= c.radius) {
         if (_lastWarnedZone?.circleId != c.circleId) {
           _lastWarnedZone = c;
+          _currentChatZoneId = c.circleId.value;
           _showDangerSnackbar(c.center);
         }
         return;
@@ -205,23 +211,17 @@ class _MapActivityState extends State<MapActivity> {
 
   void _showDangerSnackbar(LatLng zoneCenter) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🚨 You have entered a danger zone!'),
-        backgroundColor: Colors.red[800],
-        duration: Duration(seconds: 8),
-        action: SnackBarAction(
-          label: 'Confirm Danger',
-          textColor: Colors.white,
-          onPressed: () {
-            _confirmDanger(zoneCenter);
-          },
-        ),
+      buildDangerSnackBar(
+        context: context,
+        zoneCenter: zoneCenter,
+        onConfirm: () => _confirmDanger(zoneCenter, true),
+        onDeny: () => _confirmDanger(zoneCenter,false),
       ),
     );
   }
 
 
-  Future<void> _confirmDanger(LatLng location) async {
+  Future<void> _confirmDanger(LatLng location, bool isConfirm) async {
     try {
       // 🔥 Query the Firestore collection for a matching report (by location)
       final querySnapshot = await FirebaseFirestore.instance
@@ -234,9 +234,15 @@ class _MapActivityState extends State<MapActivity> {
         final doc = querySnapshot.docs.first;
 
         // 🔄 Increment the upVotes field using FieldValue.increment
-        await doc.reference.update({
-          'upVotes': FieldValue.increment(1),
-        });
+        if(isConfirm) {
+          await doc.reference.update({
+            'upVotes': FieldValue.increment(1),
+          });
+        } else {
+          await doc.reference.update({
+            'upVotes': FieldValue.increment(-1)
+          });
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -470,11 +476,20 @@ class _MapActivityState extends State<MapActivity> {
                 ),
                 ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      '/chat',
-                        arguments: {'currentPosition': _currentPosition}
-                    );
+                    if(_currentChatZoneId != null) {
+                      Navigator.pushNamed(
+                          context,
+                          '/chat',
+                          arguments: {
+                            'zoneId': _currentChatZoneId,
+                            'displayName': _displayName
+                          }
+                      );
+                    }
+                    else {
+                      showTopSnackBar(Overlay.of(context),
+                          CustomSnackBar.info(message: 'You must be in a danger zone to chat!'));
+                    }
                   },
                   icon: Icon(Icons.chat_outlined),
                   label: Text("Chat"),
